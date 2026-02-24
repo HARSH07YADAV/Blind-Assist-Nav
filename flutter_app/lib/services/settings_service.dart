@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -25,6 +26,11 @@ class SettingsService extends ChangeNotifier {
   static const String _keyAnnouncementFrequency = 'announcement_frequency';
   static const String _keyVerbosityLevel = 'verbosity_level';
   static const String _keyLanguage = 'app_language';
+  // Week 5: Safety & Emergency
+  static const String _keyEmergencyContactsList = 'emergency_contacts_list';
+  static const String _keyLiveLocationEnabled = 'live_location_enabled';
+  static const String _keyCollisionWarningEnabled = 'collision_warning_enabled';
+  static const String _keyFallDetectionEnabled = 'fall_detection_enabled';
 
   SharedPreferences? _prefs;
   bool _isInitialized = false;
@@ -47,6 +53,11 @@ class SettingsService extends ChangeNotifier {
   double _announcementFrequency = 1.0; // 0.5-2.0x
   VerbosityLevel _verbosityLevel = VerbosityLevel.normal;
   AppLanguage _language = AppLanguage.english;
+  // Week 5
+  List<String> _emergencyContactsJson = [];
+  bool _liveLocationEnabled = false;
+  bool _collisionWarningEnabled = true;
+  bool _fallDetectionEnabled = true;
 
   // Getters
   bool get isInitialized => _isInitialized;
@@ -65,6 +76,11 @@ class SettingsService extends ChangeNotifier {
   double get announcementFrequency => _announcementFrequency;
   VerbosityLevel get verbosityLevel => _verbosityLevel;
   AppLanguage get language => _language;
+  // Week 5
+  List<String> get emergencyContactsJson => _emergencyContactsJson;
+  bool get liveLocationEnabled => _liveLocationEnabled;
+  bool get collisionWarningEnabled => _collisionWarningEnabled;
+  bool get fallDetectionEnabled => _fallDetectionEnabled;
 
   /// Initialize and load saved preferences
   Future<void> initialize() async {
@@ -90,6 +106,15 @@ class SettingsService extends ChangeNotifier {
       _announcementFrequency = _prefs!.getDouble(_keyAnnouncementFrequency) ?? 1.0;
       _verbosityLevel = VerbosityLevel.values[_prefs!.getInt(_keyVerbosityLevel) ?? 1]; // default: normal
       _language = AppLanguage.values[_prefs!.getInt(_keyLanguage) ?? 0]; // default: english
+      
+      // Week 5 settings
+      final contactsStr = _prefs!.getString(_keyEmergencyContactsList);
+      if (contactsStr != null && contactsStr.isNotEmpty) {
+        _emergencyContactsJson = List<String>.from(json.decode(contactsStr));
+      }
+      _liveLocationEnabled = _prefs!.getBool(_keyLiveLocationEnabled) ?? false;
+      _collisionWarningEnabled = _prefs!.getBool(_keyCollisionWarningEnabled) ?? true;
+      _fallDetectionEnabled = _prefs!.getBool(_keyFallDetectionEnabled) ?? true;
       
       // Auto-upgrade to advanced mode after 50 uses
       if (_autoAdjust && _usageCount > 50 && _userMode == UserExperienceMode.beginner) {
@@ -246,6 +271,32 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ==================== Week 5: Safety Settings ====================
+
+  Future<void> setEmergencyContactsList(List<String> contactsJson) async {
+    _emergencyContactsJson = contactsJson;
+    await _prefs?.setString(_keyEmergencyContactsList, json.encode(contactsJson));
+    notifyListeners();
+  }
+
+  Future<void> setLiveLocationEnabled(bool enabled) async {
+    _liveLocationEnabled = enabled;
+    await _prefs?.setBool(_keyLiveLocationEnabled, enabled);
+    notifyListeners();
+  }
+
+  Future<void> setCollisionWarningEnabled(bool enabled) async {
+    _collisionWarningEnabled = enabled;
+    await _prefs?.setBool(_keyCollisionWarningEnabled, enabled);
+    notifyListeners();
+  }
+
+  Future<void> setFallDetectionEnabled(bool enabled) async {
+    _fallDetectionEnabled = enabled;
+    await _prefs?.setBool(_keyFallDetectionEnabled, enabled);
+    notifyListeners();
+  }
+
   Future<void> resetToDefaults() async {
     await setSpeechRate(0.5);
     await setSpeechVolume(1.0);
@@ -260,6 +311,9 @@ class SettingsService extends ChangeNotifier {
     await setAnnouncementFrequency(1.0);
     await setVerbosityLevel(VerbosityLevel.normal);
     await setLanguage(AppLanguage.english);
+    await setLiveLocationEnabled(false);
+    await setCollisionWarningEnabled(true);
+    await setFallDetectionEnabled(true);
   }
 }
 
@@ -352,10 +406,20 @@ enum VerbosityLevel {
   }
 }
 
-/// Week 3: App language
+/// Week 3 + Week 8: App language — all major Indian languages
 enum AppLanguage {
   english,
-  hindi;
+  hindi,
+  bengali,
+  telugu,
+  marathi,
+  tamil,
+  gujarati,
+  kannada,
+  malayalam,
+  odia,
+  punjabi,
+  assamese;
 
   String get displayName {
     switch (this) {
@@ -363,6 +427,26 @@ enum AppLanguage {
         return 'English';
       case AppLanguage.hindi:
         return 'हिन्दी (Hindi)';
+      case AppLanguage.bengali:
+        return 'বাংলা (Bengali)';
+      case AppLanguage.telugu:
+        return 'తెలుగు (Telugu)';
+      case AppLanguage.marathi:
+        return 'मराठी (Marathi)';
+      case AppLanguage.tamil:
+        return 'தமிழ் (Tamil)';
+      case AppLanguage.gujarati:
+        return 'ગુજરાતી (Gujarati)';
+      case AppLanguage.kannada:
+        return 'ಕನ್ನಡ (Kannada)';
+      case AppLanguage.malayalam:
+        return 'മലയാളം (Malayalam)';
+      case AppLanguage.odia:
+        return 'ଓଡ଼ିଆ (Odia)';
+      case AppLanguage.punjabi:
+        return 'ਪੰਜਾਬੀ (Punjabi)';
+      case AppLanguage.assamese:
+        return 'অসমীয়া (Assamese)';
     }
   }
 
@@ -372,6 +456,26 @@ enum AppLanguage {
         return 'en-US';
       case AppLanguage.hindi:
         return 'hi-IN';
+      case AppLanguage.bengali:
+        return 'bn-IN';
+      case AppLanguage.telugu:
+        return 'te-IN';
+      case AppLanguage.marathi:
+        return 'mr-IN';
+      case AppLanguage.tamil:
+        return 'ta-IN';
+      case AppLanguage.gujarati:
+        return 'gu-IN';
+      case AppLanguage.kannada:
+        return 'kn-IN';
+      case AppLanguage.malayalam:
+        return 'ml-IN';
+      case AppLanguage.odia:
+        return 'or-IN';
+      case AppLanguage.punjabi:
+        return 'pa-IN';
+      case AppLanguage.assamese:
+        return 'as-IN';
     }
   }
 
@@ -381,6 +485,93 @@ enum AppLanguage {
         return 'en-US';
       case AppLanguage.hindi:
         return 'hi-IN';
+      case AppLanguage.bengali:
+        return 'bn-IN';
+      case AppLanguage.telugu:
+        return 'te-IN';
+      case AppLanguage.marathi:
+        return 'mr-IN';
+      case AppLanguage.tamil:
+        return 'ta-IN';
+      case AppLanguage.gujarati:
+        return 'gu-IN';
+      case AppLanguage.kannada:
+        return 'kn-IN';
+      case AppLanguage.malayalam:
+        return 'ml-IN';
+      case AppLanguage.odia:
+        return 'or-IN';
+      case AppLanguage.punjabi:
+        return 'pa-IN';
+      case AppLanguage.assamese:
+        return 'as-IN';
     }
   }
+
+  /// Helper: language confirmation message in the target language
+  String get switchConfirmation {
+    switch (this) {
+      case AppLanguage.english:
+        return 'Language switched to English.';
+      case AppLanguage.hindi:
+        return 'भाषा हिन्दी में बदल दी गयी है।';
+      case AppLanguage.bengali:
+        return 'ভাষা বাংলায় পরিবর্তন করা হয়েছে।';
+      case AppLanguage.telugu:
+        return 'భాష తెలుగులోకి మార్చబడింది.';
+      case AppLanguage.marathi:
+        return 'भाषा मराठीत बदलली आहे.';
+      case AppLanguage.tamil:
+        return 'மொழி தமிழுக்கு மாற்றப்பட்டது.';
+      case AppLanguage.gujarati:
+        return 'ભાષા ગુજરાતીમાં બદલાઈ ગઈ છે.';
+      case AppLanguage.kannada:
+        return 'ಭಾಷೆ ಕನ್ನಡಕ್ಕೆ ಬದಲಾಗಿದೆ.';
+      case AppLanguage.malayalam:
+        return 'ഭാഷ മലയാളത്തിലേക്ക് മാറ്റി.';
+      case AppLanguage.odia:
+        return 'ଭାଷା ଓଡ଼ିଆକୁ ବଦଳାଯାଇଛି।';
+      case AppLanguage.punjabi:
+        return 'ਭਾਸ਼ਾ ਪੰਜਾਬੀ ਵਿੱਚ ਬਦਲ ਦਿੱਤੀ ਗਈ ਹੈ।';
+      case AppLanguage.assamese:
+        return 'ভাষা অসমীয়ালৈ সলনি কৰা হৈছে।';
+    }
+  }
+
+  /// Parse language name string to AppLanguage
+  static AppLanguage? fromName(String name) {
+    final lower = name.toLowerCase().trim();
+    const languageMap = {
+      'english': AppLanguage.english,
+      'hindi': AppLanguage.hindi,
+      'bengali': AppLanguage.bengali,
+      'bangla': AppLanguage.bengali,
+      'telugu': AppLanguage.telugu,
+      'marathi': AppLanguage.marathi,
+      'tamil': AppLanguage.tamil,
+      'gujarati': AppLanguage.gujarati,
+      'kannada': AppLanguage.kannada,
+      'malayalam': AppLanguage.malayalam,
+      'odia': AppLanguage.odia,
+      'oriya': AppLanguage.odia,
+      'punjabi': AppLanguage.punjabi,
+      'assamese': AppLanguage.assamese,
+      // Hindi names for languages
+      'हिन्दी': AppLanguage.hindi,
+      'बांग्ला': AppLanguage.bengali,
+      'बंगाली': AppLanguage.bengali,
+      'तेलुगु': AppLanguage.telugu,
+      'मराठी': AppLanguage.marathi,
+      'तमिल': AppLanguage.tamil,
+      'गुजराती': AppLanguage.gujarati,
+      'कन्नड़': AppLanguage.kannada,
+      'मलयालम': AppLanguage.malayalam,
+      'ओडिया': AppLanguage.odia,
+      'पंजाबी': AppLanguage.punjabi,
+      'असमिया': AppLanguage.assamese,
+      'अंग्रेजी': AppLanguage.english,
+    };
+    return languageMap[lower];
+  }
 }
+

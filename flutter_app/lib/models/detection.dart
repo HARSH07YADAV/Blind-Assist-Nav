@@ -76,18 +76,25 @@ enum DangerLevel {
       case 'stairs':
       case 'stairs_down':
       case 'staircase':
+      case 'crosswalk':
         return DangerLevel.critical;
       case 'person':
+      case 'traffic light':
         return DangerLevel.high;
       case 'chair':
       case 'couch':
       case 'table':
       case 'dining table':
+      case 'bicycle':
+      case 'motorcycle':
         return DangerLevel.medium;
       case 'book':
       case 'potted plant':
+      case 'signboard':
+      case 'bench':
         return DangerLevel.low;
       case 'door':
+      case 'elevator':
         return DangerLevel.info;
       default:
         return DangerLevel.unknown;

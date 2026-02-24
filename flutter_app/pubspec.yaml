@@ -54,6 +54,15 @@ dependencies:
   # Week 3: Battery status voice command
   battery_plus: ^6.0.0
 
+  # Week 5: Offline mode connectivity monitoring
+  connectivity_plus: ^6.0.0
+
+  # Week 8: Face recognition
+  google_mlkit_face_detection: ^0.11.0
+
+  # Week 8: BLE indoor navigation
+  flutter_blue_plus: ^1.32.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

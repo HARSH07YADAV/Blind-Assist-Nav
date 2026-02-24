@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
 
@@ -23,6 +24,23 @@ import '../services/feedback_service.dart';
 import '../services/earcon_service.dart';
 import '../services/wake_word_service.dart';
 import '../services/conversation_flow_service.dart';
+import '../services/depth_estimation_service.dart';
+import '../services/scene_classification_service.dart';
+import '../services/traffic_detection_service.dart';
+import '../services/landmark_service.dart';
+import '../services/path_memory_service.dart';
+// Week 5: Safety & Emergency
+import '../services/fall_detection_service.dart';
+import '../services/collision_warning_service.dart';
+import '../services/offline_mode_service.dart';
+// Week 6: Accessibility & Onboarding
+import '../services/onboarding_service.dart';
+import '../services/tutorial_service.dart';
+import '../services/personalization_wizard_service.dart';
+// Week 8: Advanced features
+import '../services/face_recognition_service.dart';
+import '../services/indoor_navigation_service.dart';
+import '../services/daily_summary_service.dart';
 import '../core/risk_calculator.dart';
 import '../widgets/detection_overlay.dart';
 import 'package:battery_plus/battery_plus.dart';
@@ -55,6 +73,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   DateTime _lastDetectionTime = DateTime.now();
 
   final RiskCalculator _riskCalculator = RiskCalculator();
+
+  // Week 6: Track simplified/advanced UI mode
+  bool _showAdvancedControls = false;
 
   @override
   void initState() {
@@ -151,7 +172,158 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _startDetection();
     };
     
-    debugPrint('[Startup] Non-critical services initialized');
+    // Week 4: Initialize smarter detection services
+    final depthService = context.read<DepthEstimationService>();
+    await depthService.initialize();
+    final pathMemory = context.read<PathMemoryService>();
+    await pathMemory.initialize();
+    
+    // Week 5: Initialize fall detection, collision warning, and offline mode
+    final fallDetection = context.read<FallDetectionService>();
+    final offlineMode = context.read<OfflineModeService>();
+    
+    await Future.wait([
+      fallDetection.initialize(),
+      offlineMode.initialize(),
+    ]);
+    
+    // Wire fall detection callbacks
+    final ttsServiceRef = context.read<TTSService>();
+    final hapticRef = context.read<HapticService>();
+    
+    fallDetection.onFallDetected = () {
+      hapticRef.vibrateEmergency();
+      ttsServiceRef.askAreYouOkay();
+    };
+    
+    fallDetection.onCountdownTick = (int seconds) {
+      ttsServiceRef.speakEmergency('SOS in $seconds seconds. Say I\'m okay to cancel.');
+    };
+    
+    fallDetection.onAutoSOS = () async {
+      ttsServiceRef.speakEmergency('No response. Sending emergency alert to all contacts.');
+      await _triggerEmergency();
+    };
+    
+    fallDetection.onFallCancelled = () {
+      ttsServiceRef.confirmSafe();
+    };
+    
+    fallDetection.onFeedback = (String message) {
+      ttsServiceRef.speakImmediately(message);
+    };
+    
+    // Wire offline mode connectivity announcements
+    offlineMode.onConnectivityChanged = (String message) {
+      ttsServiceRef.speakImmediately(message);
+    };
+    
+    // Apply settings for Week 5 toggles
+    fallDetection.setEnabled(settingsService.fallDetectionEnabled);
+    context.read<CollisionWarningService>().setEnabled(settingsService.collisionWarningEnabled);
+    
+    // Week 6: Initialize onboarding, tutorial, and personalization wizard
+    final onboarding = context.read<OnboardingService>();
+    final tutorial = context.read<TutorialService>();
+    final wizard = context.read<PersonalizationWizardService>();
+    
+    await onboarding.initialize();
+    
+    // Wire onboarding callbacks
+    onboarding.onSpeak = (String message) {
+      ttsServiceRef.speakImmediately(message);
+    };
+    onboarding.onCompleted = () {
+      ttsServiceRef.speakImmediately('Onboarding complete. You\'re ready to go!');
+    };
+    onboarding.onStartPersonalization = () {
+      wizard.startWizard();
+    };
+    
+    // Wire tutorial callbacks
+    tutorial.onSpeak = (String message) {
+      ttsServiceRef.speakImmediately(message);
+    };
+    tutorial.onSimulateDetections = (List<Detection> detections) {
+      if (mounted) {
+        setState(() {
+          _detections = detections;
+        });
+      }
+    };
+    tutorial.onCompleted = () {
+      debugPrint('[Tutorial] Completed');
+    };
+    
+    // Wire personalization wizard callbacks
+    wizard.onSpeak = (String message) {
+      ttsServiceRef.speakImmediately(message);
+    };
+    wizard.onApplySetting = (String setting, dynamic value) {
+      switch (setting) {
+        case 'speechRate':
+          settingsService.setSpeechRate(value as double);
+          break;
+        case 'verbosity':
+          final level = switch (value as String) {
+            'minimal' => VerbosityLevel.minimal,
+            'detailed' => VerbosityLevel.detailed,
+            _ => VerbosityLevel.normal,
+          };
+          settingsService.setVerbosityLevel(level);
+          break;
+        case 'userMode':
+          final mode = (value as String) == 'advanced'
+              ? UserExperienceMode.advanced
+              : UserExperienceMode.beginner;
+          settingsService.setUserMode(mode);
+          break;
+      }
+    };
+    wizard.onCompleted = () {
+      debugPrint('[Wizard] Personalization completed');
+    };
+    
+    // Auto-trigger onboarding on first launch
+    if (!onboarding.hasCompletedOnboarding) {
+      // Small delay to let services settle
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          onboarding.startTour();
+        }
+      });
+    }
+    
+    // Week 8: Initialize face recognition, indoor nav, daily summary
+    final faceRecService = context.read<FaceRecognitionService>();
+    final indoorNavService = context.read<IndoorNavigationService>();
+    final dailySummaryService = context.read<DailySummaryService>();
+    
+    await Future.wait([
+      faceRecService.initialize(),
+      indoorNavService.initialize(),
+      dailySummaryService.initialize(),
+    ]);
+    
+    // Wire face recognition callbacks
+    faceRecService.onSpeak = (String message) {
+      ttsServiceRef.speakImmediately(message);
+    };
+    faceRecService.onFaceRecognized = (String name, String position) {
+      debugPrint('[FaceRec] $name detected $position');
+    };
+    
+    // Wire indoor navigation callbacks
+    indoorNavService.onSpeak = (String message) {
+      ttsServiceRef.speakImmediately(message);
+    };
+    
+    // Wire daily summary callbacks
+    dailySummaryService.onSpeak = (String message) {
+      ttsServiceRef.speakImmediately(message);
+    };
+    
+    debugPrint('[Startup] Non-critical services initialized (including Week 4, 5, 6 & 8)');
   }
 
   /// Set up hands-free voice activation for blind users
@@ -217,8 +389,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // New: Path clear check
     voiceService.onPathClear = _announcePathStatus;
     
-    // New: I'm okay response (for fall detection)
-    voiceService.onImOkay = () => activationService.confirmUserOkay();
+    // New: I'm okay response (for fall detection — Week 5 enhanced)
+    voiceService.onImOkay = () {
+      // Cancel both old and new fall detection
+      activationService.confirmUserOkay();
+      context.read<FallDetectionService>().confirmUserOkay();
+    };
     
     // New: Read text command
     voiceService.onReadText = _readTextFromCamera;
@@ -268,17 +444,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     };
     
     voiceService.onSwitchLanguage = (String language) {
+      final lang = AppLanguage.fromName(language);
+      if (lang == null) {
+        tts.speakImmediately(
+          'Language "$language" not found. Available: English, Hindi, '
+          'Bengali, Telugu, Marathi, Tamil, Gujarati, Kannada, '
+          'Malayalam, Odia, Punjabi, Assamese.');
+        return;
+      }
       final settings = context.read<SettingsService>();
-      final lang = language == 'hindi' ? AppLanguage.hindi : AppLanguage.english;
       settings.setLanguage(lang);
       tts.setLanguage(lang);
       voiceService.setListeningLocale(lang.localeCode);
       // Pause wake word briefly for language switch
       final wakeWord = context.read<WakeWordService>();
       wakeWord.pause();
-      tts.speakImmediately(lang == AppLanguage.hindi 
-          ? 'भाषा हिन्दी में बदल दी गयी है।' 
-          : 'Language switched to English.');
+      tts.speakImmediately(lang.switchConfirmation);
       // Resume wake word after TTS finishes
       Future.delayed(const Duration(seconds: 3), () => wakeWord.resume());
     };
@@ -297,6 +478,190 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     };
     
+    // === Week 4: Smarter detection commands ===
+    voiceService.onWhatScene = () {
+      final sceneService = context.read<SceneClassificationService>();
+      tts.speakImmediately(sceneService.sceneDescription);
+    };
+    
+    voiceService.onTrafficLight = () {
+      final trafficService = context.read<TrafficDetectionService>();
+      final state = trafficService.currentLightState;
+      switch (state) {
+        case TrafficLightState.red:
+          tts.speakImmediately('Red light detected. Do not cross.');
+          break;
+        case TrafficLightState.green:
+          tts.speakImmediately('Green light detected. May be safe to cross.');
+          break;
+        case TrafficLightState.yellow:
+          tts.speakImmediately('Yellow light detected. Prepare to stop.');
+          break;
+        case TrafficLightState.unknown:
+          tts.speakImmediately('No traffic light detected currently.');
+          break;
+      }
+    };
+    
+    voiceService.onFindLandmark = (String type) {
+      final landmarkService = context.read<LandmarkService>();
+      final results = landmarkService.findByKeyword(type);
+      if (results.isNotEmpty) {
+        final desc = results.map((l) => l.description).join('. ');
+        tts.speakImmediately(desc);
+      } else {
+        tts.speakImmediately('No $type detected nearby. Keep looking.');
+      }
+    };
+    
+    voiceService.onRememberPlace = () async {
+      final pathMemory = context.read<PathMemoryService>();
+      try {
+        await pathMemory.recordLocation(_detections);
+        tts.speakImmediately('Location remembered. I\'ll recognize this place next time.');
+      } catch (e) {
+        tts.speakImmediately('Could not save location. Check GPS permissions.');
+      }
+    };
+    
+    voiceService.onWhatsUsuallyHere = () async {
+      final pathMemory = context.read<PathMemoryService>();
+      final announcement = await pathMemory.getFamiliarRouteAnnouncement();
+      if (announcement != null) {
+        tts.speakImmediately(announcement);
+      } else {
+        tts.speakImmediately('I don\'t have memories for this location yet.');
+      }
+    };
+    
+    // === Week 5: Safety & Emergency voice commands ===
+    voiceService.onAddContact = (String name, String phone) {
+      final emergency = context.read<EmergencyService>();
+      if (name.isEmpty || phone.isEmpty) {
+        tts.speakImmediately('To add a contact, say: add contact, followed by name and phone number.');
+        return;
+      }
+      emergency.addContact(name, phone).then((success) {
+        if (success) {
+          tts.speakImmediately('Added $name as emergency contact.');
+        } else {
+          tts.speakImmediately('Could not add contact. You may have reached the maximum of 5.');
+        }
+      });
+    };
+    
+    voiceService.onRemoveContact = (String name) {
+      final emergency = context.read<EmergencyService>();
+      if (name.isEmpty) {
+        tts.speakImmediately('Say remove contact followed by the contact name.');
+        return;
+      }
+      emergency.removeContact(name).then((success) {
+        if (success) {
+          tts.speakImmediately('Removed $name from emergency contacts.');
+        } else {
+          tts.speakImmediately('Contact $name not found.');
+        }
+      });
+    };
+    
+    voiceService.onListContacts = () {
+      final emergency = context.read<EmergencyService>();
+      tts.speakImmediately(emergency.listContactsDescription());
+    };
+    
+    voiceService.onShareLocation = () {
+      final emergency = context.read<EmergencyService>();
+      if (!emergency.hasContacts) {
+        tts.speakImmediately('No emergency contacts set. Add a contact first.');
+        return;
+      }
+      if (emergency.isLiveSharing) {
+        emergency.stopLiveLocationSharing();
+        tts.speakImmediately('Live location sharing stopped.');
+      } else {
+        emergency.startLiveLocationSharing();
+        tts.speakImmediately('Live location sharing started. Your contacts will receive updates every 30 seconds.');
+      }
+    };
+    
+    voiceService.onCancelSOS = () {
+      context.read<FallDetectionService>().confirmUserOkay();
+      activationService.confirmUserOkay();
+      tts.speakImmediately('SOS cancelled.');
+    };
+    
+    // Week 6: Onboarding, Tutorial, and Mode voice commands
+    voiceService.onStartTutorial = () {
+      context.read<TutorialService>().startTutorial();
+    };
+    
+    voiceService.onSetupWizard = () {
+      context.read<PersonalizationWizardService>().startWizard();
+    };
+    
+    voiceService.onMoreOptions = () {
+      if (mounted) {
+        setState(() {
+          _showAdvancedControls = true;
+        });
+        tts.speakImmediately('Showing all controls.');
+      }
+    };
+    
+    voiceService.onSetMode = (String mode) {
+      final settingsRef = context.read<SettingsService>();
+      if (mode == 'advanced') {
+        settingsRef.setUserMode(UserExperienceMode.advanced);
+        tts.speakImmediately('Advanced mode activated. Fewer announcements, faster responses.');
+      } else {
+        settingsRef.setUserMode(UserExperienceMode.beginner);
+        if (mounted) setState(() { _showAdvancedControls = false; });
+        tts.speakImmediately('Beginner mode activated. More guidance and reassurance.');
+      }
+    };
+    
+    // Handle onboarding/tutorial responses via yes/no
+    final existingYesNoHandler = voiceService.onYesNoResponse;
+    voiceService.onYesNoResponse = (bool isYes) {
+      final onboardingRef = context.read<OnboardingService>();
+      final wizardRef = context.read<PersonalizationWizardService>();
+      
+      if (onboardingRef.isActive) {
+        if (isYes) {
+          onboardingRef.nextStep();
+        } else {
+          onboardingRef.handleResponse(false);
+        }
+      } else if (wizardRef.isActive) {
+        wizardRef.handleResponse(isYes ? 'yes' : 'no');
+      } else {
+        existingYesNoHandler?.call(isYes);
+      }
+    };
+    
+    // Handle "next" during onboarding/tutorial
+    voiceService.onRepeat = () {
+      final onboardingRef = context.read<OnboardingService>();
+      final tutorialRef = context.read<TutorialService>();
+      if (onboardingRef.isActive) {
+        onboardingRef.nextStep();
+      } else if (tutorialRef.isActive) {
+        tutorialRef.skipToNext();
+      } else {
+        tts.speakImmediately('Repeating last update.');
+        _announceCurrentDetections();
+      }
+    };
+    
+    // Track tutorial command practice
+    voiceService.onAnyCommand = (VoiceCommand cmd, String raw) {
+      final tutorialRef = context.read<TutorialService>();
+      if (tutorialRef.isActive) {
+        tutorialRef.onCommandExecuted(cmd.name);
+      }
+    };
+    
     // Initialize learning services
     final learningService = context.read<LearningService>();
     final feedbackService = context.read<FeedbackService>();
@@ -304,6 +669,54 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     feedbackService.initialize();
     learningService.startSession();
     feedbackService.startSession();
+    
+    // Week 8: Face recognition voice commands
+    voiceService.onRememberFace = (String name) async {
+      if (name.isEmpty) {
+        tts.speakImmediately('Please say "remember this face as" followed by the person\'s name.');
+        return;
+      }
+      final faceRec = context.read<FaceRecognitionService>();
+      final camera = context.read<CameraService>();
+      if (camera.controller != null) {
+        final image = await camera.captureInputImage();
+        if (image != null) {
+          await faceRec.saveFace(name, image);
+        } else {
+          tts.speakImmediately('Could not capture image. Please try again.');
+        }
+      }
+    };
+    
+    voiceService.onForgetFace = (String name) {
+      if (name.isEmpty) {
+        tts.speakImmediately('Please say "forget" followed by the person\'s name.');
+        return;
+      }
+      context.read<FaceRecognitionService>().forgetFace(name);
+    };
+    
+    voiceService.onListFaces = () {
+      context.read<FaceRecognitionService>().listFaces();
+    };
+    
+    // Week 8: Indoor navigation voice commands
+    voiceService.onWhereAmIIndoors = () {
+      context.read<IndoorNavigationService>().whereAmI();
+    };
+    
+    voiceService.onSaveLocation = (String name) {
+      if (name.isEmpty) {
+        tts.speakImmediately('Please say "save this location as" followed by the location name.');
+        return;
+      }
+      context.read<IndoorNavigationService>().saveLocation(name);
+    };
+    
+    // Week 8: Daily summary voice command
+    voiceService.onDailySummary = () {
+      context.read<DailySummaryService>().generateAndSpeak();
+    };
     
     // Enable if setting is on
     final settings = context.read<SettingsService>();
@@ -570,11 +983,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final haptic = context.read<HapticService>();
 
     await haptic.vibrateEmergency();
-    tts.speakEmergency('Sending SOS to emergency contact.');
+    
+    if (!emergency.hasContacts) {
+      tts.speakEmergency('No emergency contacts set. Please add contacts in settings or say add emergency contact.');
+      return;
+    }
+    
+    tts.speakEmergency('Sending SOS to ${emergency.contactCount} emergency contacts.');
     
     final success = await emergency.triggerSOS();
-    if (!success) {
-      tts.speakEmergency('Could not send emergency message. Please set a contact in settings.');
+    if (success) {
+      tts.speakEmergency('SOS sent successfully. Help is on the way.');
+    } else {
+      tts.speakEmergency('Could not send emergency messages. Please try again.');
     }
   }
 
@@ -749,6 +1170,69 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               : SpeechPriority.high;
           await ttsService.speak(guidance.message, priority: priority);
         }
+        
+        // === Week 4: Smarter Detection ===
+        
+        // Scene classification
+        final sceneService = context.read<SceneClassificationService>();
+        sceneService.classifyScene(detections);
+        
+        // Traffic light analysis
+        final trafficService = context.read<TrafficDetectionService>();
+        final trafficLight = trafficService.findTrafficLight(detections);
+        if (trafficLight != null) {
+          trafficService.analyzeTrafficLight(trafficLight, image);
+          final trafficMsg = trafficService.getTrafficAnnouncement();
+          if (trafficMsg != null) {
+            await ttsService.speak(trafficMsg, priority: SpeechPriority.interrupt);
+          }
+        }
+        // Crosswalk detection
+        trafficService.detectCrosswalk(image);
+        final crosswalkMsg = trafficService.getCrosswalkAnnouncement();
+        if (crosswalkMsg != null) {
+          await ttsService.speak(crosswalkMsg, priority: SpeechPriority.high);
+        }
+        
+        // Landmark analysis
+        final landmarkService = context.read<LandmarkService>();
+        landmarkService.analyzeLandmarks(
+          detections,
+          frameWidth: image.width,
+          frameHeight: image.height,
+        );
+        final landmarkMsg = landmarkService.getTopLandmarkAnnouncement();
+        if (landmarkMsg != null) {
+          await ttsService.speak(landmarkMsg);
+        }
+        
+        // Path memory: record location periodically
+        final pathMemory = context.read<PathMemoryService>();
+        pathMemory.recordLocation(detections);
+        
+        // === Week 5: Collision Warning ===
+        final collisionService = context.read<CollisionWarningService>();
+        if (settings.collisionWarningEnabled) {
+          final warnings = collisionService.analyzeFrame(
+            detections,
+            frameWidth: image.width,
+            frameHeight: image.height,
+          );
+          
+          // Announce the most urgent collision warning
+          if (warnings.isNotEmpty) {
+            final topWarning = warnings.first;
+            final priority = topWarning.urgency == CollisionUrgency.critical
+                ? SpeechPriority.interrupt
+                : SpeechPriority.high;
+            await ttsService.speak(topWarning.message, priority: priority);
+            
+            // Haptic feedback for collision warnings
+            if (settings.vibrationEnabled) {
+              await hapticService.vibrateEmergency();
+            }
+          }
+        }
       }
     } catch (e) {
       debugPrint('Detection error: $e');
@@ -887,6 +1371,131 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildControlPanel() {
+    final settings = context.watch<SettingsService>();
+    final isBeginner = settings.userMode == UserExperienceMode.beginner && !_showAdvancedControls;
+    
+    if (isBeginner) {
+      return _buildSimplifiedControlPanel();
+    }
+    return _buildFullControlPanel();
+  }
+
+  /// Week 6: Simplified 3-button layout for beginner users
+  Widget _buildSimplifiedControlPanel() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: Colors.black87,
+      child: Column(
+        children: [
+          // Start/Stop button — full width, large
+          Semantics(
+            button: true,
+            label: _isDetecting ? 'Stop detection. Double tap to stop.' : 'Start detection. Double tap to start.',
+            hint: 'Main detection control',
+            sortKey: const OrdinalSortKey(0),
+            child: SizedBox(
+              width: double.infinity,
+              height: 120,
+              child: ElevatedButton(
+                onPressed: _toggleDetection,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _isDetecting ? Colors.red.shade700 : Colors.green.shade700,
+                  foregroundColor: Colors.white,
+                  textStyle: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(_isDetecting ? Icons.stop_circle : Icons.play_circle, size: 40),
+                    const SizedBox(width: 12),
+                    Text(_isDetecting ? 'STOP' : 'START'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // SOS button — full width, red
+          Semantics(
+            button: true,
+            label: 'Emergency SOS. Double tap to send distress signal.',
+            hint: 'Emergency button',
+            sortKey: const OrdinalSortKey(1),
+            child: SizedBox(
+              width: double.infinity,
+              height: 100,
+              child: ElevatedButton(
+                onPressed: _triggerEmergency,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade900,
+                  foregroundColor: Colors.white,
+                  textStyle: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.emergency, size: 36),
+                    SizedBox(width: 12),
+                    Text('SOS'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Settings + More Options row
+          Row(
+            children: [
+              Expanded(
+                child: Semantics(
+                  button: true,
+                  label: 'Open settings',
+                  sortKey: const OrdinalSortKey(2),
+                  child: SizedBox(
+                    height: 80,
+                    child: ElevatedButton.icon(
+                      onPressed: () => Navigator.pushNamed(context, '/settings'),
+                      icon: const Icon(Icons.settings, size: 28),
+                      label: const Text('Settings', style: TextStyle(fontSize: 18)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Semantics(
+                  button: true,
+                  label: 'Show more controls',
+                  hint: 'Reveals flash, voice, and other buttons',
+                  sortKey: const OrdinalSortKey(3),
+                  child: SizedBox(
+                    height: 80,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() { _showAdvancedControls = true; });
+                        context.read<TTSService>().speakImmediately('Showing all controls.');
+                      },
+                      icon: const Icon(Icons.more_horiz, size: 28),
+                      label: const Text('More', style: TextStyle(fontSize: 18)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Full control panel with all buttons (advanced mode or expanded)
+  Widget _buildFullControlPanel() {
     return Container(
       padding: const EdgeInsets.all(16),
       color: Colors.black87,
@@ -901,6 +1510,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 child: Semantics(
                   button: true,
                   label: _isDetecting ? 'Stop detection' : 'Start detection',
+                  hint: 'Main detection control',
+                  sortKey: const OrdinalSortKey(0),
                   child: SizedBox(
                     height: 100,
                     child: ElevatedButton(
@@ -925,6 +1536,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 child: Semantics(
                   button: true,
                   label: 'Emergency SOS',
+                  hint: 'Send distress signal to emergency contacts',
+                  sortKey: const OrdinalSortKey(1),
                   child: SizedBox(
                     height: 100,
                     child: ElevatedButton(
@@ -957,6 +1570,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 child: Semantics(
                   button: true,
                   label: 'Toggle flashlight',
+                  sortKey: const OrdinalSortKey(2),
                   child: SizedBox(
                     height: 80,
                     child: ElevatedButton(
@@ -978,7 +1592,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               Expanded(
                 child: Semantics(
                   button: true,
-                  label: 'What is ahead',
+                  label: 'What is ahead. Announces detected objects.',
+                  sortKey: const OrdinalSortKey(3),
                   child: SizedBox(
                     height: 80,
                     child: ElevatedButton(
@@ -1001,6 +1616,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 child: Semantics(
                   button: true,
                   label: 'Open settings',
+                  sortKey: const OrdinalSortKey(4),
                   child: SizedBox(
                     height: 80,
                     child: ElevatedButton(
@@ -1024,7 +1640,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               Expanded(
                 child: Semantics(
                   button: true,
-                  label: 'Voice commands',
+                  label: 'Voice commands. Tap to start listening.',
+                  sortKey: const OrdinalSortKey(5),
                   child: Consumer<VoiceCommandService>(
                     builder: (context, voiceService, _) => SizedBox(
                       height: 80,
@@ -1057,6 +1674,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
+          // Show "Simplify" button in advanced mode for beginners who expanded
+          if (_showAdvancedControls && context.read<SettingsService>().userMode == UserExperienceMode.beginner)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: TextButton(
+                onPressed: () {
+                  setState(() { _showAdvancedControls = false; });
+                },
+                child: const Text('← Simplify', style: TextStyle(color: Colors.white70)),
+              ),
+            ),
         ],
       ),
     );

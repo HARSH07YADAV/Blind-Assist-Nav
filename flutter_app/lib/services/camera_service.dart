@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:camera/camera.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 /// FULLY FEATURED Camera service with:
 /// - Frame throttling (adaptive 2-8 FPS for detection)
@@ -331,6 +333,35 @@ class CameraService extends ChangeNotifier {
   }
 
   bool get isFlashOn => _controller?.value.flashMode == FlashMode.torch;
+
+  /// Week 8: Capture a still image and return as InputImage for ML Kit
+  Future<InputImage?> captureInputImage() async {
+    if (_controller == null || !_isInitialized) return null;
+
+    try {
+      // Pause streaming temporarily for capture
+      final wasStreaming = _isStreaming;
+      if (wasStreaming) {
+        await _controller!.stopImageStream();
+        _isStreaming = false;
+      }
+
+      final xFile = await _controller!.takePicture();
+      final file = File(xFile.path);
+      final inputImage = InputImage.fromFile(file);
+
+      // Resume streaming if it was active
+      if (wasStreaming) {
+        // Caller is responsible for restarting stream if needed
+        debugPrint('Camera: Image captured, stream paused');
+      }
+
+      return inputImage;
+    } catch (e) {
+      debugPrint('Camera: Capture error: $e');
+      return null;
+    }
+  }
 
   @override
   void dispose() {

@@ -23,6 +23,23 @@ import 'services/feedback_service.dart';
 import 'services/earcon_service.dart';
 import 'services/wake_word_service.dart';
 import 'services/conversation_flow_service.dart';
+import 'services/depth_estimation_service.dart';
+import 'services/scene_classification_service.dart';
+import 'services/traffic_detection_service.dart';
+import 'services/landmark_service.dart';
+import 'services/path_memory_service.dart';
+// Week 5: Safety & Emergency
+import 'services/fall_detection_service.dart';
+import 'services/collision_warning_service.dart';
+import 'services/offline_mode_service.dart';
+// Week 6: Accessibility & Onboarding
+import 'services/onboarding_service.dart';
+import 'services/tutorial_service.dart';
+import 'services/personalization_wizard_service.dart';
+// Week 8: Advanced features
+import 'services/face_recognition_service.dart';
+import 'services/indoor_navigation_service.dart';
+import 'services/daily_summary_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/history_screen.dart';
@@ -65,6 +82,31 @@ class VisionMateApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => EarconService()),
         ChangeNotifierProvider(create: (_) => WakeWordService()),
         ChangeNotifierProvider(create: (_) => ConversationFlowService()),
+        // Week 4: Smarter Detection & Navigation
+        ChangeNotifierProvider(create: (_) => DepthEstimationService()),
+        ChangeNotifierProvider(create: (_) => SceneClassificationService()),
+        ChangeNotifierProvider(create: (_) => TrafficDetectionService()),
+        ChangeNotifierProvider(create: (_) => LandmarkService()),
+        ChangeNotifierProvider(create: (_) => PathMemoryService()),
+        // Week 5: Safety & Emergency
+        ChangeNotifierProvider(create: (_) => FallDetectionService()),
+        ChangeNotifierProvider(create: (_) => CollisionWarningService()),
+        ChangeNotifierProvider(create: (_) => OfflineModeService()),
+        // Week 6: Accessibility & Onboarding
+        ChangeNotifierProvider(create: (_) => OnboardingService()),
+        ChangeNotifierProvider(create: (_) => TutorialService()),
+        ChangeNotifierProvider(create: (_) => PersonalizationWizardService()),
+        // Week 8: Advanced Features
+        ChangeNotifierProvider(create: (_) => FaceRecognitionService()),
+        ChangeNotifierProvider(create: (_) => IndoorNavigationService()),
+        ChangeNotifierProxyProvider<HistoryService, DailySummaryService>(
+          create: (context) => DailySummaryService(
+            historyService: context.read<HistoryService>(),
+          ),
+          update: (_, history, previous) => previous ?? DailySummaryService(
+            historyService: history,
+          ),
+        ),
       ],
       child: Consumer<SettingsService>(
         builder: (context, settings, _) {

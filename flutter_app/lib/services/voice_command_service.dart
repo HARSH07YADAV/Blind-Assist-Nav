@@ -37,6 +37,31 @@ enum VoiceCommand {
   // Week 3: Conversational yes/no
   yesResponse,       // "Yes", "Sure", "Go ahead"
   noResponse,        // "No", "Cancel", "Never mind"
+  // Week 4: Smarter detection & navigation
+  whatScene,          // "What scene is this?", "Where am I?"
+  trafficLight,       // "Any traffic lights?", "Is it safe to cross?"
+  findLandmark,       // "Find the stairs", "Find the elevator"
+  rememberPlace,      // "Remember this place"
+  whatsUsuallyHere,   // "What's usually here?"
+  // Week 5: Safety & Emergency
+  addEmergencyContact,  // "Add emergency contact"
+  removeEmergencyContact, // "Remove contact"
+  listEmergencyContacts,  // "List my contacts"
+  shareLocation,       // "Share my location"
+  cancelSOS,           // "Cancel SOS", "Cancel emergency"
+  // Week 6: Accessibility & Onboarding
+  startTutorial,       // "Start tutorial", "Practice mode"
+  setupWizard,         // "Setup wizard", "Personalize"
+  moreOptions,         // "More options", "Show all controls"
+  setBeginnerMode,     // "Beginner mode"
+  setAdvancedMode,     // "Advanced mode"
+  // Week 8: Advanced features
+  rememberFace,        // "Remember this face as [name]"
+  forgetFace,          // "Forget [name]"
+  listFaces,           // "List saved faces", "Who do I know?"
+  whereAmIIndoors,     // "Where am I indoors?"
+  saveLocation,        // "Save this location as [name]"
+  dailySummary,        // "Daily summary", "Today's report"
   unknown,          // Unrecognized
 }
 
@@ -86,6 +111,30 @@ class VoiceCommandService extends ChangeNotifier {
   Function(bool)? onToggleVibration;     // true = on, false = off
   // Week 3: Conversational flow callbacks
   Function(bool)? onYesNoResponse;       // true = yes, false = no
+  // Week 4: Smarter detection callbacks
+  Function? onWhatScene;
+  Function? onTrafficLight;
+  Function(String)? onFindLandmark;       // Pass landmark type
+  Function? onRememberPlace;
+  Function? onWhatsUsuallyHere;
+  // Week 5: Safety & Emergency callbacks
+  Function(String name, String phone)? onAddContact;
+  Function(String name)? onRemoveContact;
+  Function? onListContacts;
+  Function? onShareLocation;
+  Function? onCancelSOS;
+  // Week 6: Accessibility & Onboarding callbacks
+  Function? onStartTutorial;
+  Function? onSetupWizard;
+  Function? onMoreOptions;
+  Function(String mode)? onSetMode;  // 'beginner' or 'advanced'
+  // Week 8: Advanced features callbacks
+  Function(String name)? onRememberFace;  // Pass the name label
+  Function(String name)? onForgetFace;
+  Function? onListFaces;
+  Function? onWhereAmIIndoors;
+  Function(String name)? onSaveLocation;
+  Function? onDailySummary;
 
   bool get isInitialized => _isInitialized;
   bool get isListening => _isListening;
@@ -337,19 +386,47 @@ class VoiceCommandService extends ChangeNotifier {
       return _ParsedCommand(VoiceCommand.toggleHighContrast, 'off');
     }
     
-    // Language switching
-    if (lower.contains("switch to hindi") ||
-        lower.contains("speak in hindi") ||
-        lower.contains("hindi mode") ||
-        lower.contains("हिंदी में बोलो") ||
-        lower.contains("भाषा बदलो")) {
-      return _ParsedCommand(VoiceCommand.switchLanguage, 'hindi');
-    }
-    if (lower.contains("switch to english") ||
-        lower.contains("speak in english") ||
-        lower.contains("english mode") ||
-        lower.contains("अंग्रेजी में बोलो")) {
-      return _ParsedCommand(VoiceCommand.switchLanguage, 'english');
+    // Language switching — supports all Indian languages
+    // "Switch to Bengali", "Speak in Tamil", "Hindi mode", etc.
+    if (lower.contains("switch to ") ||
+        lower.contains("speak in ") ||
+        lower.contains("language ") ||
+        lower.contains("भाषा बदलो") ||
+        lower.contains("में बोलो")) {
+      // Extract language name
+      String? langName;
+      for (final prefix in ['switch to ', 'speak in ', 'language ']) {
+        if (lower.contains(prefix)) {
+          final idx = lower.indexOf(prefix) + prefix.length;
+          langName = words.substring(idx).trim().split(' ').first;
+          break;
+        }
+      }
+      // Also handle "[language] mode"
+      if (langName == null && lower.contains(' mode')) {
+        langName = lower.replaceAll(' mode', '').trim().split(' ').last;
+      }
+      // Handle Hindi voice commands for language names
+      if (langName == null || langName.isEmpty) {
+        // Try to match any language name in the input
+        final allNames = [
+          'english', 'hindi', 'bengali', 'bangla', 'telugu', 'marathi',
+          'tamil', 'gujarati', 'kannada', 'malayalam', 'odia', 'oriya',
+          'punjabi', 'assamese',
+          'हिन्दी', 'बांग्ला', 'बंगाली', 'तेलुगु', 'मराठी', 'तमिल',
+          'गुजराती', 'कन्नड़', 'मलयालम', 'ओडिया', 'पंजाबी', 'असमिया',
+          'अंग्रेजी',
+        ];
+        for (final name in allNames) {
+          if (lower.contains(name)) {
+            langName = name;
+            break;
+          }
+        }
+      }
+      if (langName != null && langName.isNotEmpty) {
+        return _ParsedCommand(VoiceCommand.switchLanguage, langName);
+      }
     }
     
     // Vibration toggle
@@ -563,6 +640,265 @@ class VoiceCommandService extends ChangeNotifier {
       return _ParsedCommand(VoiceCommand.setVerbosity, 'normal');
     }
     
+    // === WEEK 4: WHAT SCENE ===
+    if (lower.contains("what scene") ||
+        lower.contains("what kind of place") ||
+        lower.contains("what room is this") ||
+        lower.contains("identify the scene") ||
+        lower.contains("what place is this") ||
+        // Hindi
+        lower.contains("यह कौन सी जगह है") ||
+        lower.contains("कौन सा कमरा")) {
+      return _ParsedCommand(VoiceCommand.whatScene);
+    }
+    
+    // === WEEK 4: TRAFFIC LIGHT ===
+    if (lower.contains("traffic light") ||
+        lower.contains("any traffic lights") ||
+        lower.contains("is it safe to cross") ||
+        lower.contains("can i cross") ||
+        lower.contains("signal") ||
+        lower.contains("red or green") ||
+        // Hindi
+        lower.contains("ट्रैफिक लाइट") ||
+        lower.contains("सिग्नल") ||
+        lower.contains("पार कर सकता")) {
+      return _ParsedCommand(VoiceCommand.trafficLight);
+    }
+    
+    // === WEEK 4: FIND LANDMARK ===
+    final landmarkPatterns = [
+      RegExp(r'find (?:the |a )?(?:nearest )?(stairs|elevator|lift|door|sign|bench|bathroom|toilet)', caseSensitive: false),
+      RegExp(r'where is (?:the |a )?(?:nearest )?(stairs|elevator|lift|door|sign|bench|bathroom|toilet)', caseSensitive: false),
+      // Hindi
+      RegExp(r'(सीढ़ी|लिफ्ट|दरवाज़ा|बाथरूम)\s*कहाँ', caseSensitive: false),
+    ];
+    for (final pattern in landmarkPatterns) {
+      final match = pattern.firstMatch(lower);
+      if (match != null && match.group(1) != null) {
+        return _ParsedCommand(VoiceCommand.findLandmark, match.group(1)!.trim());
+      }
+    }
+    
+    // === WEEK 4: REMEMBER PLACE ===
+    if (lower.contains("remember this place") ||
+        lower.contains("save this location") ||
+        lower.contains("mark this spot") ||
+        // Hindi
+        lower.contains("यह जगह याद रखो") ||
+        lower.contains("जगह सेव करो")) {
+      return _ParsedCommand(VoiceCommand.rememberPlace);
+    }
+    
+    // === WEEK 4: WHAT'S USUALLY HERE ===
+    if (lower.contains("what's usually here") ||
+        lower.contains("what is usually here") ||
+        lower.contains("what do you remember") ||
+        lower.contains("familiar route") ||
+        lower.contains("path memory") ||
+        // Hindi
+        lower.contains("यहाँ क्या होता है") ||
+        lower.contains("यह रास्ता")) {
+      return _ParsedCommand(VoiceCommand.whatsUsuallyHere);
+    }
+    
+    // === WEEK 5: EMERGENCY CONTACT MANAGEMENT ===
+    if (lower.contains("add emergency contact") ||
+        lower.contains("add contact") ||
+        lower.contains("new emergency contact") ||
+        // Hindi
+        lower.contains("संपर्क जोड़ो") ||
+        lower.contains("आपातकालीन संपर्क")) {
+      // Try to extract name and phone from the command
+      final addPattern = RegExp(
+        r'add (?:emergency )?contact\s+([\w]+)\s+([\d\+\-\s]+)',
+        caseSensitive: false,
+      );
+      final match = addPattern.firstMatch(lower);
+      if (match != null) {
+        return _ParsedCommand(VoiceCommand.addEmergencyContact, 
+            '${match.group(1)!.trim()}|${match.group(2)!.trim()}');
+      }
+      return _ParsedCommand(VoiceCommand.addEmergencyContact);
+    }
+    
+    if (lower.contains("remove contact") ||
+        lower.contains("delete contact") ||
+        lower.contains("remove emergency contact") ||
+        // Hindi
+        lower.contains("संपर्क हटाओ")) {
+      final removePattern = RegExp(
+        r'(?:remove|delete) (?:emergency )?contact\s+([\w]+)',
+        caseSensitive: false,
+      );
+      final match = removePattern.firstMatch(lower);
+      if (match != null) {
+        return _ParsedCommand(VoiceCommand.removeEmergencyContact, match.group(1)!.trim());
+      }
+      return _ParsedCommand(VoiceCommand.removeEmergencyContact);
+    }
+    
+    if (lower.contains("list contacts") ||
+        lower.contains("list my contacts") ||
+        lower.contains("who are my contacts") ||
+        lower.contains("emergency contacts") ||
+        lower.contains("show contacts") ||
+        // Hindi
+        lower.contains("संपर्क सूची") ||
+        lower.contains("संपर्क दिखाओ")) {
+      return _ParsedCommand(VoiceCommand.listEmergencyContacts);
+    }
+    
+    if (lower.contains("share my location") ||
+        lower.contains("share location") ||
+        lower.contains("send my location") ||
+        lower.contains("live location") ||
+        // Hindi
+        lower.contains("मेरी लोकेशन भेजो") ||
+        lower.contains("लोकेशन शेयर")) {
+      return _ParsedCommand(VoiceCommand.shareLocation);
+    }
+    
+    if (lower.contains("cancel sos") ||
+        lower.contains("cancel emergency") ||
+        lower.contains("stop sos") ||
+        lower.contains("false alarm") ||
+        // Hindi
+        lower.contains("एसओएस रद्द") ||
+        lower.contains("आपातकाल रद्द")) {
+      return _ParsedCommand(VoiceCommand.cancelSOS);
+    }
+    
+    // === WEEK 6: ONBOARDING & TUTORIAL ===
+    if (lower.contains("start tutorial") ||
+        lower.contains("tutorial mode") ||
+        lower.contains("practice mode") ||
+        lower.contains("practice") ||
+        lower.contains("teach me") ||
+        // Hindi
+        lower.contains("ट्यूटोरियल शुरू") ||
+        lower.contains("अभ्यास") ||
+        lower.contains("सिखाओ")) {
+      return _ParsedCommand(VoiceCommand.startTutorial);
+    }
+    
+    if (lower.contains("setup wizard") ||
+        lower.contains("personalize") ||
+        lower.contains("set up my preferences") ||
+        lower.contains("customize") ||
+        // Hindi
+        lower.contains("सेटअप") ||
+        lower.contains("अनुकूलित")) {
+      return _ParsedCommand(VoiceCommand.setupWizard);
+    }
+    
+    if (lower.contains("more options") ||
+        lower.contains("show all controls") ||
+        lower.contains("advanced controls") ||
+        lower.contains("all buttons") ||
+        // Hindi
+        lower.contains("और विकल्प") ||
+        lower.contains("सभी बटन")) {
+      return _ParsedCommand(VoiceCommand.moreOptions);
+    }
+    
+    if (lower.contains("beginner mode") ||
+        lower.contains("simple mode") ||
+        lower.contains("easy mode") ||
+        // Hindi
+        lower.contains("शुरुआती मोड") ||
+        lower.contains("आसान मोड")) {
+      return _ParsedCommand(VoiceCommand.setBeginnerMode);
+    }
+    
+    if (lower.contains("advanced mode") ||
+        lower.contains("expert mode") ||
+        lower.contains("pro mode") ||
+        // Hindi
+        lower.contains("उन्नत मोड") ||
+        lower.contains("एडवांस मोड")) {
+      return _ParsedCommand(VoiceCommand.setAdvancedMode);
+    }
+    
+    // === WEEK 8: ADVANCED FEATURES ===
+    if (lower.contains("remember this face") ||
+        lower.contains("save this face") ||
+        lower.contains("remember face") ||
+        // Hindi
+        lower.contains("यह चेहरा याद रखो") ||
+        lower.contains("चेहरा सेव करो")) {
+      // Extract name after "as" keyword
+      String? name;
+      final asIndex = lower.indexOf(' as ');
+      if (asIndex >= 0) {
+        name = words.substring(asIndex + 4).trim();
+      }
+      return _ParsedCommand(VoiceCommand.rememberFace, name);
+    }
+    
+    if (lower.contains("forget face") ||
+        lower.contains("remove face") ||
+        lower.contains("delete face") ||
+        // Hindi
+        lower.contains("चेहरा भूल जाओ") ||
+        lower.contains("चेहरा हटाओ")) {
+      // Extract name after "forget" or specific keyword
+      String? name;
+      for (final kw in ['forget face ', 'forget ', 'remove face ', 'delete face ']) {
+        if (lower.contains(kw)) {
+          final idx = lower.indexOf(kw) + kw.length;
+          name = words.substring(idx).trim();
+          break;
+        }
+      }
+      return _ParsedCommand(VoiceCommand.forgetFace, name);
+    }
+    
+    if (lower.contains("list faces") ||
+        lower.contains("saved faces") ||
+        lower.contains("who do i know") ||
+        lower.contains("list saved faces") ||
+        // Hindi
+        lower.contains("चेहरे दिखाओ") ||
+        lower.contains("सेव किए चेहरे")) {
+      return _ParsedCommand(VoiceCommand.listFaces);
+    }
+    
+    if (lower.contains("where am i indoors") ||
+        lower.contains("indoor location") ||
+        lower.contains("indoor navigation") ||
+        lower.contains("which room") ||
+        // Hindi
+        lower.contains("मैं अंदर कहाँ हूँ") ||
+        lower.contains("कौन सा कमरा")) {
+      return _ParsedCommand(VoiceCommand.whereAmIIndoors);
+    }
+    
+    if (lower.contains("save this location") ||
+        lower.contains("save location") ||
+        lower.contains("remember this spot") ||
+        // Hindi
+        lower.contains("यह जगह सेव करो") ||
+        lower.contains("लोकेशन सेव")) {
+      String? name;
+      final asIndex = lower.indexOf(' as ');
+      if (asIndex >= 0) {
+        name = words.substring(asIndex + 4).trim();
+      }
+      return _ParsedCommand(VoiceCommand.saveLocation, name);
+    }
+    
+    if (lower.contains("daily summary") ||
+        lower.contains("today's report") ||
+        lower.contains("todays report") ||
+        lower.contains("day summary") ||
+        lower.contains("usage report") ||
+        // Hindi
+        lower.contains("दैनिक सारांश") ||
+        lower.contains("आज की रिपोर्ट")) {
+      return _ParsedCommand(VoiceCommand.dailySummary);
+    }
+    
     return _ParsedCommand(VoiceCommand.unknown);
   }
 
@@ -665,6 +1001,80 @@ class VoiceCommandService extends ChangeNotifier {
         break;
       case VoiceCommand.noResponse:
         onYesNoResponse?.call(false);
+        break;
+      // Week 4: Smarter detection
+      case VoiceCommand.whatScene:
+        onWhatScene?.call();
+        break;
+      case VoiceCommand.trafficLight:
+        onTrafficLight?.call();
+        break;
+      case VoiceCommand.findLandmark:
+        if (objectName != null) {
+          onFindLandmark?.call(objectName);
+        }
+        break;
+      case VoiceCommand.rememberPlace:
+        onRememberPlace?.call();
+        break;
+      case VoiceCommand.whatsUsuallyHere:
+        onWhatsUsuallyHere?.call();
+        break;
+      // Week 5: Safety & Emergency
+      case VoiceCommand.addEmergencyContact:
+        if (objectName != null && objectName.contains('|')) {
+          final parts = objectName.split('|');
+          onAddContact?.call(parts[0], parts[1]);
+        } else {
+          onAddContact?.call('', '');
+        }
+        break;
+      case VoiceCommand.removeEmergencyContact:
+        onRemoveContact?.call(objectName ?? '');
+        break;
+      case VoiceCommand.listEmergencyContacts:
+        onListContacts?.call();
+        break;
+      case VoiceCommand.shareLocation:
+        onShareLocation?.call();
+        break;
+      case VoiceCommand.cancelSOS:
+        onCancelSOS?.call();
+        break;
+      // Week 6: Accessibility & Onboarding
+      case VoiceCommand.startTutorial:
+        onStartTutorial?.call();
+        break;
+      case VoiceCommand.setupWizard:
+        onSetupWizard?.call();
+        break;
+      case VoiceCommand.moreOptions:
+        onMoreOptions?.call();
+        break;
+      case VoiceCommand.setBeginnerMode:
+        onSetMode?.call('beginner');
+        break;
+      case VoiceCommand.setAdvancedMode:
+        onSetMode?.call('advanced');
+        break;
+      // Week 8: Advanced features
+      case VoiceCommand.rememberFace:
+        onRememberFace?.call(objectName ?? '');
+        break;
+      case VoiceCommand.forgetFace:
+        onForgetFace?.call(objectName ?? '');
+        break;
+      case VoiceCommand.listFaces:
+        onListFaces?.call();
+        break;
+      case VoiceCommand.whereAmIIndoors:
+        onWhereAmIIndoors?.call();
+        break;
+      case VoiceCommand.saveLocation:
+        onSaveLocation?.call(objectName ?? '');
+        break;
+      case VoiceCommand.dailySummary:
+        onDailySummary?.call();
         break;
       case VoiceCommand.unknown:
         onUnknownCommand?.call(rawWords);
