@@ -63,6 +63,9 @@ dependencies:
   # Week 8: BLE indoor navigation
   flutter_blue_plus: ^1.32.0
 
+  # UI: Google Fonts (Inter — matches LinkedIn demo design)
+  google_fonts: ^6.2.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

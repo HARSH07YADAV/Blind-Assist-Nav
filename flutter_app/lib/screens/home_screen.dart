@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../main.dart' show vmTeal, vmTealDark, vmBg, vmSurface, vmBorder, vmCard, vmDim;
 
 import '../models/detection.dart';
 import '../services/camera_service.dart';
@@ -1250,78 +1252,268 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final activationService = context.watch<AccessibilityActivationService>();
-    
+
     return GestureDetector(
-      // Feature: Double-tap anywhere to ask "what's ahead"
       onDoubleTap: () {
         activationService.onDoubleTap();
         _announceCurrentDetections();
       },
-      // Feature: Long-press anywhere to start voice commands
       onLongPress: () {
         activationService.onLongPress();
       },
       child: Scaffold(
-        backgroundColor: Colors.black,
-        body: SafeArea(
-          child: Column(
-            children: [
-              // Status bar
-              _buildStatusBar(),
-
-              // Camera preview with overlay
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _buildCameraPreview(),
-              ),
-
-              // Control panel with large buttons
-              _buildControlPanel(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusBar() {
-    final highestRisk = _risks.isNotEmpty ? _risks.first : null;
-    
-    return Semantics(
-      liveRegion: true,
-      label: _statusMessage,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        color: _getRiskColor(highestRisk?.level),
-        child: Column(
+        backgroundColor: vmBg,
+        body: Column(
           children: [
-            Text(
-              _statusMessage,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+            // ── Brand header bar ──────────────────────────────────────────
+            _buildHeader(),
+
+            // ── Camera preview (fills remaining space) ───────────────────
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _isLoading
+                      ? _buildLoadingPlaceholder()
+                      : _buildCameraPreview(),
+
+                  // Floating obstacle banner (above control panel)
+                  Positioned(
+                    left: 0, right: 0, bottom: 0,
+                    child: _buildObstacleBanner(),
+                  ),
+                ],
               ),
-              textAlign: TextAlign.center,
             ),
-            if (highestRisk != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                '${highestRisk.level.name.toUpperCase()}: ${highestRisk.detection.className}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
+
+            // ── Control panel ────────────────────────────────────────────
+            _buildControlPanel(),
           ],
         ),
       ),
     );
   }
+
+  // ── Branded header ─────────────────────────────────────────────────────────
+  Widget _buildHeader() {
+    final highestRisk = _risks.isNotEmpty ? _risks.first : null;
+
+    return Semantics(
+      liveRegion: true,
+      label: _statusMessage,
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.only(
+          top: MediaQuery.of(context).padding.top + 8,
+          left: 16, right: 16, bottom: 12,
+        ),
+        decoration: BoxDecoration(
+          color: vmSurface,
+          border: const Border(
+            bottom: BorderSide(color: vmBorder, width: 1),
+          ),
+        ),
+        child: Row(
+          children: [
+            // Logo icon
+            Container(
+              width: 38, height: 38,
+              decoration: BoxDecoration(
+                color: vmCard,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: vmBorder, width: 1),
+              ),
+              child: const Icon(Icons.remove_red_eye_outlined, color: vmTeal, size: 20),
+            ),
+            const SizedBox(width: 10),
+            // Title
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'VisionMate',
+                    style: GoogleFonts.inter(
+                      fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white,
+                    ),
+                  ),
+                  Text(
+                    'AI Navigation',
+                    style: GoogleFonts.inter(fontSize: 11, color: vmDim, letterSpacing: 1),
+                  ),
+                ],
+              ),
+            ),
+            // Status pill
+            _buildStatusPill(highestRisk),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusPill(RiskAssessment? highestRisk) {
+    Color pillColor;
+    String pillText;
+    IconData pillIcon;
+
+    if (_isLoading) {
+      pillColor = Colors.grey;
+      pillText  = 'LOADING';
+      pillIcon  = Icons.hourglass_top_rounded;
+    } else if (_isDetecting) {
+      if (highestRisk != null && (highestRisk.level == RiskLevel.critical || highestRisk.level == RiskLevel.high)) {
+        pillColor = const Color(0xFFFF4F4F);
+        pillText  = highestRisk.level.name.toUpperCase();
+        pillIcon  = Icons.warning_amber_rounded;
+      } else {
+        pillColor = vmTeal;
+        pillText  = 'DETECTING';
+        pillIcon  = Icons.radar;
+      }
+    } else {
+      pillColor = Colors.grey.shade600;
+      pillText  = 'PAUSED';
+      pillIcon  = Icons.pause_circle_outline;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: pillColor.withAlpha(30),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(color: pillColor.withAlpha(120), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(pillIcon, size: 13, color: pillColor),
+          const SizedBox(width: 5),
+          Text(
+            pillText,
+            style: GoogleFonts.inter(
+              fontSize: 10, fontWeight: FontWeight.w700,
+              color: pillColor, letterSpacing: 1.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Loading placeholder ─────────────────────────────────────────────────────
+  Widget _buildLoadingPlaceholder() {
+    return Container(
+      color: vmBg,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(
+              width: 36, height: 36,
+              child: CircularProgressIndicator(color: vmTeal, strokeWidth: 2.5),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Starting camera...',
+              style: GoogleFonts.inter(fontSize: 14, color: vmDim),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Floating obstacle announcement banner ─────────────────────────────────
+  Widget _buildObstacleBanner() {
+    final highestRisk = _risks.isNotEmpty ? _risks.first : null;
+
+    if (!_isDetecting || highestRisk == null) {
+      // Path clear strip
+      if (_isDetecting) {
+        return Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xCC0A1A26),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF00E57A).withAlpha(120), width: 1),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.check_circle_outline, color: Color(0xFF00E57A), size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Path clear — no obstacles detected',
+                  style: GoogleFonts.inter(
+                    fontSize: 14, fontWeight: FontWeight.w600,
+                    color: const Color(0xFF00E57A),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+      return const SizedBox.shrink();
+    }
+
+    final color = _getRiskColor(highestRisk.level);
+    final isUrgent = highestRisk.level == RiskLevel.critical || highestRisk.level == RiskLevel.high;
+    final icon = isUrgent ? Icons.volume_up_rounded : Icons.info_outline_rounded;
+    final prefix = isUrgent ? '⚠ OBSTACLE DETECTED:' : '🔊 Detected:';
+    final message =
+        '${highestRisk.detection.className}, ${highestRisk.detection.distanceDescription}';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xDD0A1A26),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withAlpha(180), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: color.withAlpha(60),
+            blurRadius: 16,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  prefix,
+                  style: GoogleFonts.inter(
+                    fontSize: 10, fontWeight: FontWeight.w800,
+                    color: color, letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  message,
+                  style: GoogleFonts.inter(
+                    fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // _buildStatusBar() replaced by _buildHeader() and _buildObstacleBanner() above.
 
   Color _getRiskColor(RiskLevel? level) {
     return switch (level) {
@@ -1382,311 +1574,188 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// Week 6: Simplified 3-button layout for beginner users
   Widget _buildSimplifiedControlPanel() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.black87,
-      child: Column(
-        children: [
-          // Start/Stop button — full width, large
-          Semantics(
-            button: true,
-            label: _isDetecting ? 'Stop detection. Double tap to stop.' : 'Start detection. Double tap to start.',
-            hint: 'Main detection control',
-            sortKey: const OrdinalSortKey(0),
-            child: SizedBox(
-              width: double.infinity,
-              height: 120,
-              child: ElevatedButton(
-                onPressed: _toggleDetection,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _isDetecting ? Colors.red.shade700 : Colors.green.shade700,
-                  foregroundColor: Colors.white,
-                  textStyle: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(_isDetecting ? Icons.stop_circle : Icons.play_circle, size: 40),
-                    const SizedBox(width: 12),
-                    Text(_isDetecting ? 'STOP' : 'START'),
-                  ],
+    return _VmControlPanel(
+      children: [
+        // ── START / STOP ──────────────────────────────────────────────────
+        Semantics(
+          button: true,
+          label: _isDetecting
+              ? 'Stop detection. Double tap to stop.'
+              : 'Start detection. Double tap to start.',
+          hint: 'Main detection control',
+          sortKey: const OrdinalSortKey(0),
+          child: _VmPrimaryButton(
+            label: _isDetecting ? 'STOP DETECTION' : 'START DETECTION',
+            icon: _isDetecting ? Icons.stop_circle_outlined : Icons.play_circle_outline_rounded,
+            active: _isDetecting,
+            onPressed: _toggleDetection,
+            height: 120,
+          ),
+        ),
+        const SizedBox(height: 10),
+        // ── SOS ───────────────────────────────────────────────────────────
+        Semantics(
+          button: true,
+          label: 'Emergency SOS. Double tap to send distress signal.',
+          hint: 'Emergency button',
+          sortKey: const OrdinalSortKey(1),
+          child: _VmSosButton(onPressed: _triggerEmergency),
+        ),
+        const SizedBox(height: 10),
+        // ── SETTINGS + MORE row ───────────────────────────────────────────
+        Row(
+          children: [
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: 'Open settings',
+                sortKey: const OrdinalSortKey(2),
+                child: _VmSecondaryButton(
+                  icon: Icons.settings_outlined,
+                  label: 'Settings',
+                  onPressed: () => Navigator.pushNamed(context, '/settings'),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          // SOS button — full width, red
-          Semantics(
-            button: true,
-            label: 'Emergency SOS. Double tap to send distress signal.',
-            hint: 'Emergency button',
-            sortKey: const OrdinalSortKey(1),
-            child: SizedBox(
-              width: double.infinity,
-              height: 100,
-              child: ElevatedButton(
-                onPressed: _triggerEmergency,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.shade900,
-                  foregroundColor: Colors.white,
-                  textStyle: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.emergency, size: 36),
-                    SizedBox(width: 12),
-                    Text('SOS'),
-                  ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: 'Show more controls',
+                hint: 'Reveals flash, voice, and other buttons',
+                sortKey: const OrdinalSortKey(3),
+                child: _VmSecondaryButton(
+                  icon: Icons.more_horiz_rounded,
+                  label: 'More',
+                  onPressed: () {
+                    setState(() { _showAdvancedControls = true; });
+                    context.read<TTSService>().speakImmediately('Showing all controls.');
+                  },
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          // Settings + More Options row
-          Row(
-            children: [
-              Expanded(
-                child: Semantics(
-                  button: true,
-                  label: 'Open settings',
-                  sortKey: const OrdinalSortKey(2),
-                  child: SizedBox(
-                    height: 80,
-                    child: ElevatedButton.icon(
-                      onPressed: () => Navigator.pushNamed(context, '/settings'),
-                      icon: const Icon(Icons.settings, size: 28),
-                      label: const Text('Settings', style: TextStyle(fontSize: 18)),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Semantics(
-                  button: true,
-                  label: 'Show more controls',
-                  hint: 'Reveals flash, voice, and other buttons',
-                  sortKey: const OrdinalSortKey(3),
-                  child: SizedBox(
-                    height: 80,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        setState(() { _showAdvancedControls = true; });
-                        context.read<TTSService>().speakImmediately('Showing all controls.');
-                      },
-                      icon: const Icon(Icons.more_horiz, size: 28),
-                      label: const Text('More', style: TextStyle(fontSize: 18)),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+          ],
+        ),
+      ],
     );
   }
 
-  /// Full control panel with all buttons (advanced mode or expanded)
+  /// Full control panel: compact icon row + main START/SOS row
   Widget _buildFullControlPanel() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.black87,
-      child: Column(
-        children: [
-          // Row 1: Main detection button (Feature 10 - Large)
-          Row(
-            children: [
-              // Start/Stop button - takes 3/4 width
-              Expanded(
-                flex: 3,
-                child: Semantics(
-                  button: true,
-                  label: _isDetecting ? 'Stop detection' : 'Start detection',
-                  hint: 'Main detection control',
-                  sortKey: const OrdinalSortKey(0),
-                  child: SizedBox(
-                    height: 100,
-                    child: ElevatedButton(
-                      onPressed: _toggleDetection,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _isDetecting ? Colors.red : Colors.blue,
-                        foregroundColor: Colors.white,
-                        textStyle: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      child: Text(_isDetecting ? 'STOP' : 'START'),
-                    ),
-                  ),
+    return _VmControlPanel(
+      children: [
+        // ── Row 1: START + SOS ────────────────────────────────────────────
+        Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Semantics(
+                button: true,
+                label: _isDetecting ? 'Stop detection' : 'Start detection',
+                hint: 'Main detection control',
+                sortKey: const OrdinalSortKey(0),
+                child: _VmPrimaryButton(
+                  label: _isDetecting ? 'STOP' : 'START',
+                  icon: _isDetecting
+                      ? Icons.stop_circle_outlined
+                      : Icons.play_circle_outline_rounded,
+                  active: _isDetecting,
+                  onPressed: _toggleDetection,
+                  height: 100,
                 ),
               ),
-              const SizedBox(width: 12),
-              // Emergency SOS button (Feature 17)
-              Expanded(
-                flex: 1,
-                child: Semantics(
-                  button: true,
-                  label: 'Emergency SOS',
-                  hint: 'Send distress signal to emergency contacts',
-                  sortKey: const OrdinalSortKey(1),
-                  child: SizedBox(
-                    height: 100,
-                    child: ElevatedButton(
-                      onPressed: _triggerEmergency,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red.shade900,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.emergency, size: 32),
-                          Text('SOS', style: TextStyle(fontSize: 14)),
-                        ],
-                      ),
-                    ),
-                  ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 1,
+              child: Semantics(
+                button: true,
+                label: 'Emergency SOS',
+                hint: 'Send distress signal to emergency contacts',
+                sortKey: const OrdinalSortKey(1),
+                child: _VmSosButton(onPressed: _triggerEmergency, height: 100),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        // ── Row 2: Icon tiles ─────────────────────────────────────────────
+        Row(
+          children: [
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: 'Toggle flashlight',
+                sortKey: const OrdinalSortKey(2),
+                child: _VmIconTile(
+                  icon: Icons.flashlight_on_outlined,
+                  label: 'Torch',
+                  onPressed: _toggleFlash,
                 ),
               ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // Row 2: Secondary controls (Feature 10 - 80px height minimum)
-          Row(
-            children: [
-              // Flashlight
-              Expanded(
-                child: Semantics(
-                  button: true,
-                  label: 'Toggle flashlight',
-                  sortKey: const OrdinalSortKey(2),
-                  child: SizedBox(
-                    height: 80,
-                    child: ElevatedButton(
-                      onPressed: _toggleFlash,
-                      child: const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.flashlight_on, size: 28),
-                          SizedBox(height: 4),
-                          Text('Torch'),
-                        ],
-                      ),
-                    ),
-                  ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: 'What is ahead. Announces detected objects.',
+                sortKey: const OrdinalSortKey(3),
+                child: _VmIconTile(
+                  icon: Icons.remove_red_eye_outlined,
+                  label: 'Ahead?',
+                  onPressed: _announceCurrentDetections,
                 ),
               ),
-              const SizedBox(width: 12),
-              // What's ahead
-              Expanded(
-                child: Semantics(
-                  button: true,
-                  label: 'What is ahead. Announces detected objects.',
-                  sortKey: const OrdinalSortKey(3),
-                  child: SizedBox(
-                    height: 80,
-                    child: ElevatedButton(
-                      onPressed: _announceCurrentDetections,
-                      child: const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.visibility, size: 28),
-                          SizedBox(height: 4),
-                          Text('Ahead?'),
-                        ],
-                      ),
-                    ),
-                  ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: 'Open settings',
+                sortKey: const OrdinalSortKey(4),
+                child: _VmIconTile(
+                  icon: Icons.settings_outlined,
+                  label: 'Settings',
+                  onPressed: () => Navigator.pushNamed(context, '/settings'),
                 ),
               ),
-              const SizedBox(width: 12),
-              // Settings
-              Expanded(
-                child: Semantics(
-                  button: true,
-                  label: 'Open settings',
-                  sortKey: const OrdinalSortKey(4),
-                  child: SizedBox(
-                    height: 80,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/settings');
-                      },
-                      child: const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.settings, size: 28),
-                          SizedBox(height: 4),
-                          Text('Settings'),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Voice command microphone button
-              Expanded(
-                child: Semantics(
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Consumer<VoiceCommandService>(
+                builder: (context, voiceService, _) => Semantics(
                   button: true,
                   label: 'Voice commands. Tap to start listening.',
                   sortKey: const OrdinalSortKey(5),
-                  child: Consumer<VoiceCommandService>(
-                    builder: (context, voiceService, _) => SizedBox(
-                      height: 80,
-                      child: ElevatedButton(
-                        onPressed: voiceService.isInitialized 
-                            ? () => voiceService.toggleListening()
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: voiceService.isListening 
-                              ? Colors.green 
-                              : null,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              voiceService.isListening 
-                                  ? Icons.mic 
-                                  : Icons.mic_none,
-                              size: 28,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(voiceService.isListening ? 'Listening' : 'Voice'),
-                          ],
-                        ),
-                      ),
-                    ),
+                  child: _VmIconTile(
+                    icon: voiceService.isListening
+                        ? Icons.mic_rounded
+                        : Icons.mic_none_rounded,
+                    label: voiceService.isListening ? 'Listening' : 'Voice',
+                    active: voiceService.isListening,
+                    onPressed: voiceService.isInitialized
+                        ? () => voiceService.toggleListening()
+                        : null,
                   ),
                 ),
               ),
-            ],
-          ),
-          // Show "Simplify" button in advanced mode for beginners who expanded
-          if (_showAdvancedControls && context.read<SettingsService>().userMode == UserExperienceMode.beginner)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: TextButton(
-                onPressed: () {
-                  setState(() { _showAdvancedControls = false; });
-                },
-                child: const Text('← Simplify', style: TextStyle(color: Colors.white70)),
+            ),
+          ],
+        ),
+        // Simplify link for beginner mode
+        if (_showAdvancedControls &&
+            context.read<SettingsService>().userMode == UserExperienceMode.beginner)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => setState(() { _showAdvancedControls = false; }),
+              child: Text(
+                '← Simplify',
+                style: GoogleFonts.inter(color: vmDim, fontSize: 13),
               ),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 
@@ -1697,3 +1766,233 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 }
+
+// ── Shared VisionMate UI primitives ──────────────────────────────────────────
+
+/// Dark glassmorphism control panel container
+class _VmControlPanel extends StatelessWidget {
+  final List<Widget> children;
+  const _VmControlPanel({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
+      decoration: const BoxDecoration(
+        color: Color(0xFF0A1A26),
+        border: Border(top: BorderSide(color: Color(0x3D00E5CC), width: 1)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: children,
+      ),
+    );
+  }
+}
+
+/// Primary full-width START / STOP button
+class _VmPrimaryButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool active;          // true = detecting (teal glow)
+  final VoidCallback onPressed;
+  final double height;
+
+  const _VmPrimaryButton({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.onPressed,
+    this.height = 100,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const teal        = Color(0xFF00E5CC);
+    const activeColor = teal;
+    const stopColor   = Color(0xFFFF4F4F);
+    final btnColor    = active ? stopColor : activeColor;
+
+    return SizedBox(
+      width: double.infinity,
+      height: height,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: btnColor.withAlpha(active ? 90 : 60),
+              blurRadius: 18,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: ElevatedButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 32),
+          label: Text(
+            label,
+            style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w800),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: btnColor,
+            foregroundColor: active ? Colors.white : Colors.black,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            elevation: 0,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Red pulsing SOS button
+class _VmSosButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  final double height;
+
+  const _VmSosButton({
+    required this.onPressed,
+    this.height = 100,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const red = Color(0xFFFF4F4F);
+    return SizedBox(
+      width: double.infinity,
+      height: height,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: red.withAlpha(100),
+              blurRadius: 20,
+              spreadRadius: 3,
+            ),
+          ],
+        ),
+        child: ElevatedButton.icon(
+          onPressed: onPressed,
+          icon: const Icon(Icons.emergency_rounded, size: 30),
+          label: Text(
+            'SOS',
+            style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w900),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF8B0000),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: red, width: 1.5),
+            ),
+            elevation: 0,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Secondary glassmorphism button (Settings / More)
+class _VmSecondaryButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  const _VmSecondaryButton({
+    required this.icon,
+    required this.label,
+    this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 80,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0x0DFFFFFF),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: Color(0x3D00E5CC), width: 1),
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 26, color: const Color(0xFF00E5CC)),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Small icon tile for the advanced toolbar row
+class _VmIconTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final bool active;
+
+  const _VmIconTile({
+    required this.icon,
+    required this.label,
+    this.onPressed,
+    this.active = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const teal = Color(0xFF00E5CC);
+    return SizedBox(
+      height: 80,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: active
+              ? teal.withAlpha(40)
+              : const Color(0x0DFFFFFF),
+          foregroundColor: active ? teal : Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(
+              color: active ? teal.withAlpha(180) : const Color(0x3D00E5CC),
+              width: 1,
+            ),
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 24, color: active ? teal : Colors.white70),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 11, fontWeight: FontWeight.w600,
+                color: active ? teal : Colors.white70,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

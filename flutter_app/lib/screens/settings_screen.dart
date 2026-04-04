@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 
+import '../main.dart' show vmTeal, vmTealDark, vmBg, vmSurface, vmBorder, vmCard, vmDim;
 import '../services/settings_service.dart';
 import '../services/tts_service.dart';
 import '../services/voice_command_service.dart';
@@ -8,164 +10,140 @@ import '../services/wake_word_service.dart';
 import '../services/camera_service.dart';
 import '../services/onnx_service.dart';
 
-/// Settings screen (All features)
-/// Allows user to customize speech, detection, haptic, and navigation settings
+/// Settings screen — dark teal glassmorphism redesign.
+/// All logic unchanged; only visual shell updated.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
+
+  // ── Colour helpers ─────────────────────────────────────────────────────────
+  static const _teal   = vmTeal;
+  static const _bg     = vmBg;
+  static const _card   = vmCard;
+  static const _border = vmBorder;
+  static const _dim    = vmDim;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: _bg,
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text(
+          'Settings',
+          style: GoogleFonts.inter(
+            fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white,
+          ),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, size: 32),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: Consumer<SettingsService>(
         builder: (context, settings, _) {
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
-              // Speech Settings
-              _buildSectionHeader(context, 'Speech'),
-              const SizedBox(height: 8),
-              _buildSliderTile(
+              // Speech
+              _sectionHeader('Speech'),
+              _buildSliderCard(
                 context,
                 title: 'Speech Speed',
                 subtitle: _speechSpeedLabel(settings.speechRate),
                 value: settings.speechRate,
-                min: 0.1,
-                max: 1.0,
-                onChanged: (value) async {
-                  await settings.setSpeechRate(value);
+                min: 0.1, max: 1.0,
+                onChanged: (v) async {
+                  await settings.setSpeechRate(v);
                   await context.read<TTSService>().updateSettings();
                 },
               ),
-              _buildSliderTile(
+              _buildSliderCard(
                 context,
                 title: 'Volume',
                 subtitle: '${(settings.speechVolume * 100).toInt()}%',
                 value: settings.speechVolume,
-                min: 0.0,
-                max: 1.0,
-                onChanged: (value) async {
-                  await settings.setSpeechVolume(value);
+                min: 0.0, max: 1.0,
+                onChanged: (v) async {
+                  await settings.setSpeechVolume(v);
                   await context.read<TTSService>().updateSettings();
                 },
               ),
-              _buildSliderTile(
+              _buildSliderCard(
                 context,
                 title: 'Path Clear Interval',
                 subtitle: '${settings.pathClearInterval} seconds',
                 value: settings.pathClearInterval.toDouble(),
-                min: 3,
-                max: 30,
-                divisions: 27,
-                onChanged: (value) {
-                  settings.setPathClearInterval(value.toInt());
-                },
+                min: 3, max: 30, divisions: 27,
+                onChanged: (v) => settings.setPathClearInterval(v.toInt()),
               ),
-              
-              const Divider(height: 32),
-              
-              // Week 2: Verbosity Level
-              _buildSectionHeader(context, 'Verbosity'),
-              const SizedBox(height: 8),
-              _buildVerbosityTile(context, settings),
-              
-              const Divider(height: 32),
-              
-              // Week 3: Language
-              _buildSectionHeader(context, 'Language'),
-              const SizedBox(height: 8),
-              _buildLanguageTile(context, settings),
-              
-              const Divider(height: 32),
-              
-              // Navigation Mode
-              _buildSectionHeader(context, 'Navigation'),
-              const SizedBox(height: 8),
-              _buildNavigationModeTile(context, settings),
-              
-              const Divider(height: 32),
-              
-              // Detection Settings (Features 1, 2, 14)
-              _buildSectionHeader(context, 'Detection'),
-              const SizedBox(height: 8),
-              _buildSwitchTile(
+
+              _divider(),
+
+              // Verbosity
+              _sectionHeader('Verbosity'),
+              _buildVerbosityCard(context, settings),
+
+              _divider(),
+
+              // Language
+              _sectionHeader('Language'),
+              _buildLanguageCard(context, settings),
+
+              _divider(),
+
+              // Navigation
+              _sectionHeader('Navigation'),
+              _buildNavigationModeCard(context, settings),
+
+              _divider(),
+
+              // Detection
+              _sectionHeader('Detection'),
+              _buildSwitchCard(
                 context,
                 title: 'High Resolution',
-                subtitle: 'Better accuracy, slower (Feature 14)',
+                subtitle: 'Better accuracy, slightly slower',
                 value: context.watch<CameraService>().isHighResolution,
-                onChanged: (value) {
-                  context.read<CameraService>().setHighResolution(value);
-                },
+                onChanged: (v) => context.read<CameraService>().setHighResolution(v),
               ),
-              // Note: Multi-scale detection removed - YOLOv8n requires fixed 640x640 input
-              
-              const Divider(height: 32),
-              
+
+              _divider(),
+
               // Accessibility
-              _buildSectionHeader(context, 'Accessibility'),
-              const SizedBox(height: 8),
-              _buildSwitchTile(
+              _sectionHeader('Accessibility'),
+              _buildSwitchCard(
                 context,
                 title: 'High Contrast Mode',
                 subtitle: 'Yellow on black for low vision',
                 value: settings.highContrast,
-                onChanged: (value) {
-                  settings.setHighContrast(value);
-                },
+                onChanged: (v) => settings.setHighContrast(v),
               ),
-              _buildSwitchTile(
+              _buildSwitchCard(
                 context,
                 title: 'Vibration Feedback',
                 subtitle: 'Haptic alerts for obstacles',
                 value: settings.vibrationEnabled,
-                onChanged: (value) {
-                  settings.setVibrationEnabled(value);
-                },
+                onChanged: (v) => settings.setVibrationEnabled(v),
               ),
-              _buildSwitchTile(
+              _buildSwitchCard(
                 context,
                 title: 'Voice Commands',
-                subtitle: 'Control with voice',
+                subtitle: 'Control app entirely by voice',
                 value: settings.voiceCommandsEnabled,
-                onChanged: (value) {
-                  settings.setVoiceCommandsEnabled(value);
-                },
+                onChanged: (v) => settings.setVoiceCommandsEnabled(v),
               ),
-              
-              const Divider(height: 32),
-              
-              // Emergency Contact
-              _buildSectionHeader(context, 'Emergency'),
-              const SizedBox(height: 8),
-              _buildEmergencyContactTile(context, settings),
-              
-              const Divider(height: 32),
-              
+
+              _divider(),
+
+              // Emergency
+              _sectionHeader('Emergency'),
+              _buildEmergencyContactCard(context, settings),
+
+              _divider(),
+
               // Reset
-              SizedBox(
-                width: double.infinity,
-                height: 60,
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    await settings.resetToDefaults();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Settings reset to defaults')),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Reset to Defaults'),
-                ),
-              ),
-              
-              const SizedBox(height: 32),
+              _buildResetButton(context, settings),
+
+              const SizedBox(height: 16),
             ],
           );
         },
@@ -173,16 +151,37 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, String title) {
-    return Text(
-      title,
-      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-        color: Theme.of(context).colorScheme.primary,
+  // ── Section header ────────────────────────────────────────────────────────
+  Widget _sectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 8, left: 4),
+      child: Text(
+        title.toUpperCase(),
+        style: GoogleFonts.inter(
+          fontSize: 11, fontWeight: FontWeight.w700,
+          color: _teal, letterSpacing: 2,
+        ),
       ),
     );
   }
 
-  Widget _buildSliderTile(
+  Widget _divider() => const Divider(height: 28);
+
+  // ── Glass card wrapper ─────────────────────────────────────────────────────
+  Widget _glassCard({required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border, width: 1),
+      ),
+      child: child,
+    );
+  }
+
+  // ── Slider card ───────────────────────────────────────────────────────────
+  Widget _buildSliderCard(
     BuildContext context, {
     required String title,
     required String subtitle,
@@ -192,25 +191,25 @@ class SettingsScreen extends StatelessWidget {
     int? divisions,
     required Function(double) onChanged,
   }) {
-    return Card(
+    return _glassCard(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(title, style: const TextStyle(fontSize: 18)),
-                Text(subtitle, style: const TextStyle(fontSize: 16, color: Colors.grey)),
+                Text(title,
+                    style: GoogleFonts.inter(
+                        fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                Text(subtitle,
+                    style: GoogleFonts.inter(fontSize: 13, color: _dim)),
               ],
             ),
             Slider(
-              value: value,
-              min: min,
-              max: max,
-              divisions: divisions,
-              onChanged: onChanged,
+              value: value, min: min, max: max,
+              divisions: divisions, onChanged: onChanged,
             ),
           ],
         ),
@@ -218,25 +217,31 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSwitchTile(
+  // ── Switch card ───────────────────────────────────────────────────────────
+  Widget _buildSwitchCard(
     BuildContext context, {
     required String title,
     required String subtitle,
     required bool value,
     required Function(bool) onChanged,
   }) {
-    return Card(
+    return _glassCard(
       child: SwitchListTile(
-        title: Text(title, style: const TextStyle(fontSize: 18)),
-        subtitle: Text(subtitle),
-        value: value,
-        onChanged: onChanged,
+        title: Text(title,
+            style: GoogleFonts.inter(
+                fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+        subtitle: Text(subtitle,
+            style: GoogleFonts.inter(fontSize: 13, color: _dim)),
+        value: value, onChanged: onChanged,
+        activeColor: _teal,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       ),
     );
   }
 
-  Widget _buildVerbosityTile(BuildContext context, SettingsService settings) {
-    return Card(
+  // ── Verbosity card ────────────────────────────────────────────────────────
+  Widget _buildVerbosityCard(BuildContext context, SettingsService settings) {
+    return _glassCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -244,45 +249,29 @@ class SettingsScreen extends StatelessWidget {
           children: [
             Text(
               'Announcement Style: ${settings.verbosityLevel.displayName}',
-              style: const TextStyle(fontSize: 18),
+              style: GoogleFonts.inter(
+                  fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
             ),
             const SizedBox(height: 4),
-            Text(
-              settings.verbosityLevel.description,
-              style: const TextStyle(fontSize: 14, color: Colors.grey),
-            ),
-            const SizedBox(height: 12),
+            Text(settings.verbosityLevel.description,
+                style: GoogleFonts.inter(fontSize: 13, color: _dim)),
+            const SizedBox(height: 14),
             Row(
               children: [
-                Expanded(
-                  child: _buildModeButton(
-                    context,
-                    icon: Icons.volume_off,
-                    label: 'Minimal',
+                Expanded(child: _vmModeBtn(context,
+                    icon: Icons.volume_off_rounded, label: 'Minimal',
                     selected: settings.verbosityLevel == VerbosityLevel.minimal,
-                    onTap: () => settings.setVerbosityLevel(VerbosityLevel.minimal),
-                  ),
-                ),
+                    onTap: () => settings.setVerbosityLevel(VerbosityLevel.minimal))),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: _buildModeButton(
-                    context,
-                    icon: Icons.volume_down,
-                    label: 'Normal',
+                Expanded(child: _vmModeBtn(context,
+                    icon: Icons.volume_down_rounded, label: 'Normal',
                     selected: settings.verbosityLevel == VerbosityLevel.normal,
-                    onTap: () => settings.setVerbosityLevel(VerbosityLevel.normal),
-                  ),
-                ),
+                    onTap: () => settings.setVerbosityLevel(VerbosityLevel.normal))),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: _buildModeButton(
-                    context,
-                    icon: Icons.volume_up,
-                    label: 'Detailed',
+                Expanded(child: _vmModeBtn(context,
+                    icon: Icons.volume_up_rounded, label: 'Detailed',
                     selected: settings.verbosityLevel == VerbosityLevel.detailed,
-                    onTap: () => settings.setVerbosityLevel(VerbosityLevel.detailed),
-                  ),
-                ),
+                    onTap: () => settings.setVerbosityLevel(VerbosityLevel.detailed))),
               ],
             ),
           ],
@@ -291,9 +280,9 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  /// Week 3: Language selection tile
-  Widget _buildLanguageTile(BuildContext context, SettingsService settings) {
-    return Card(
+  // ── Language card ─────────────────────────────────────────────────────────
+  Widget _buildLanguageCard(BuildContext context, SettingsService settings) {
+    return _glassCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -301,44 +290,62 @@ class SettingsScreen extends StatelessWidget {
           children: [
             Text(
               'App Language: ${settings.language.displayName}',
-              style: const TextStyle(fontSize: 18),
+              style: GoogleFonts.inter(
+                  fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
             ),
             const SizedBox(height: 4),
-            const Text(
+            Text(
               'Changes voice commands and speech output',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
+              style: GoogleFonts.inter(fontSize: 13, color: _dim),
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildModeButton(
-                    context,
-                    icon: Icons.language,
-                    label: 'English',
-                    selected: settings.language == AppLanguage.english,
-                    onTap: () {
-                      settings.setLanguage(AppLanguage.english);
-                      context.read<TTSService>().setLanguage(AppLanguage.english);
-                      context.read<VoiceCommandService>().setListeningLocale('en-US');
-                    },
+            const SizedBox(height: 14),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                childAspectRatio: 1.8,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+              ),
+              itemCount: AppLanguage.values.length,
+              itemBuilder: (context, i) {
+                final lang = AppLanguage.values[i];
+                final sel  = settings.language == lang;
+                return GestureDetector(
+                  onTap: () {
+                    settings.setLanguage(lang);
+                    context.read<TTSService>().setLanguage(lang);
+                    context.read<VoiceCommandService>().setListeningLocale(lang.localeCode);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: sel ? _teal.withAlpha(30) : _card,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: sel ? _teal : _border,
+                        width: sel ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Text(
+                      lang.displayName.split(' (').first,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: sel ? FontWeight.w700 : FontWeight.w400,
+                        color: sel ? _teal : Colors.white70,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildModeButton(
-                    context,
-                    icon: Icons.translate,
-                    label: 'हिन्दी',
-                    selected: settings.language == AppLanguage.hindi,
-                    onTap: () {
-                      settings.setLanguage(AppLanguage.hindi);
-                      context.read<TTSService>().setLanguage(AppLanguage.hindi);
-                      context.read<VoiceCommandService>().setListeningLocale('hi-IN');
-                    },
-                  ),
-                ),
-              ],
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '💡 Install language TTS voices in phone Settings → Text-to-Speech',
+              style: GoogleFonts.inter(fontSize: 11, color: _dim),
             ),
           ],
         ),
@@ -346,36 +353,29 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildNavigationModeTile(BuildContext context, SettingsService settings) {
-    return Card(
+  // ── Navigation mode card ──────────────────────────────────────────────────
+  Widget _buildNavigationModeCard(BuildContext context, SettingsService settings) {
+    return _glassCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Navigation Mode', style: TextStyle(fontSize: 18)),
-            const SizedBox(height: 8),
+            Text('Navigation Mode',
+                style: GoogleFonts.inter(
+                    fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+            const SizedBox(height: 14),
             Row(
               children: [
-                Expanded(
-                  child: _buildModeButton(
-                    context,
-                    icon: Icons.home,
-                    label: 'Indoor',
+                Expanded(child: _vmModeBtn(context,
+                    icon: Icons.home_outlined, label: 'Indoor',
                     selected: settings.navigationMode == AppNavigationMode.indoor,
-                    onTap: () => settings.setNavigationMode(AppNavigationMode.indoor),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildModeButton(
-                    context,
-                    icon: Icons.directions_walk,
-                    label: 'Outdoor',
+                    onTap: () => settings.setNavigationMode(AppNavigationMode.indoor))),
+                const SizedBox(width: 12),
+                Expanded(child: _vmModeBtn(context,
+                    icon: Icons.directions_walk_rounded, label: 'Outdoor',
                     selected: settings.navigationMode == AppNavigationMode.outdoor,
-                    onTap: () => settings.setNavigationMode(AppNavigationMode.outdoor),
-                  ),
-                ),
+                    onTap: () => settings.setNavigationMode(AppNavigationMode.outdoor))),
               ],
             ),
           ],
@@ -384,7 +384,8 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildModeButton(
+  // ── Mode toggle button ────────────────────────────────────────────────────
+  Widget _vmModeBtn(
     BuildContext context, {
     required IconData icon,
     required String label,
@@ -393,29 +394,27 @@ class SettingsScreen extends StatelessWidget {
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected 
-            ? Theme.of(context).colorScheme.primaryContainer
-            : Theme.of(context).colorScheme.surface,
+          color: selected ? _teal.withAlpha(30) : _card,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected 
-              ? Theme.of(context).colorScheme.primary
-              : Colors.grey,
-            width: 2,
+            color: selected ? _teal : _border,
+            width: selected ? 1.5 : 1,
           ),
         ),
         child: Column(
           children: [
-            Icon(icon, size: 40, color: selected ? Theme.of(context).colorScheme.primary : Colors.grey),
+            Icon(icon, size: 32, color: selected ? _teal : Colors.white54),
             const SizedBox(height: 8),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                color: selected ? _teal : Colors.white70,
               ),
             ),
           ],
@@ -424,17 +423,29 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEmergencyContactTile(BuildContext context, SettingsService settings) {
-    return Card(
+  // ── Emergency contact card ────────────────────────────────────────────────
+  Widget _buildEmergencyContactCard(BuildContext context, SettingsService settings) {
+    return _glassCard(
       child: ListTile(
-        leading: const Icon(Icons.emergency, size: 32, color: Colors.red),
-        title: const Text('Emergency Contact', style: TextStyle(fontSize: 18)),
-        subtitle: Text(
-          settings.emergencyContact.isEmpty 
-            ? 'Not set' 
-            : settings.emergencyContact,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Container(
+          width: 44, height: 44,
+          decoration: BoxDecoration(
+            color: const Color(0x1FFF4F4F),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0x50FF4F4F)),
+          ),
+          child: const Icon(Icons.emergency_rounded, color: Color(0xFFFF4F4F), size: 22),
         ),
-        trailing: const Icon(Icons.edit),
+        title: Text('Emergency Contact',
+            style: GoogleFonts.inter(
+                fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+        subtitle: Text(
+          settings.emergencyContact.isEmpty ? 'Not set — tap to add' : settings.emergencyContact,
+          style: GoogleFonts.inter(
+              fontSize: 13, color: settings.emergencyContact.isEmpty ? const Color(0xFFFF4F4F) : _dim),
+        ),
+        trailing: const Icon(Icons.edit_outlined, color: vmTeal, size: 20),
         onTap: () => _showContactDialog(context, settings),
       ),
     );
@@ -442,32 +453,70 @@ class SettingsScreen extends StatelessWidget {
 
   void _showContactDialog(BuildContext context, SettingsService settings) {
     final controller = TextEditingController(text: settings.emergencyContact);
-    
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Emergency Contact'),
+      builder: (ctx) => AlertDialog(
+        title: Text('Emergency Contact',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.phone,
-          decoration: const InputDecoration(
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
             labelText: 'Phone Number',
-            hintText: 'Enter phone number',
+            labelStyle: GoogleFonts.inter(color: _dim),
+            hintText: '+91 XXXXX XXXXX',
+            hintStyle: GoogleFonts.inter(color: _dim),
+            enabledBorder: const OutlineInputBorder(
+              borderSide: BorderSide(color: vmBorder),
+            ),
+            focusedBorder: const OutlineInputBorder(
+              borderSide: BorderSide(color: vmTeal, width: 1.5),
+            ),
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.inter(color: _dim)),
           ),
           ElevatedButton(
             onPressed: () {
               settings.setEmergencyContact(controller.text);
-              Navigator.pop(context);
+              Navigator.pop(ctx);
             },
-            child: const Text('Save'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: vmTeal, foregroundColor: Colors.black,
+            ),
+            child: Text('Save', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Reset button ──────────────────────────────────────────────────────────
+  Widget _buildResetButton(BuildContext context, SettingsService settings) {
+    return SizedBox(
+      width: double.infinity,
+      height: 60,
+      child: OutlinedButton.icon(
+        onPressed: () async {
+          await settings.resetToDefaults();
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Settings reset to defaults')),
+            );
+          }
+        },
+        icon: const Icon(Icons.refresh_rounded, color: vmDim),
+        label: Text('Reset to Defaults',
+            style: GoogleFonts.inter(color: vmDim, fontWeight: FontWeight.w600)),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: vmBorder),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
       ),
     );
   }
